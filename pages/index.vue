@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { Users, Building2, Link2 } from 'lucide-vue-next'
 
-definePageMeta({
-  middleware: 'auth'
-})
-
 const supabase = useSupabaseClient()
 
 const stats = ref({

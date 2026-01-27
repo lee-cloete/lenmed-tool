@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { Plus, Trash2, X, Users, Building2 } from 'lucide-vue-next'
 
-definePageMeta({
-  middleware: 'auth'
-})
-
 const supabase = useSupabaseClient()
 
 interface Doctor {

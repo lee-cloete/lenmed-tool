@@ -8,11 +8,11 @@ export default defineNuxtConfig({
   ],
 
   supabase: {
-    redirect: false,
+    redirect: true,
     redirectOptions: {
       login: '/login',
       callback: '/',
-      exclude: ['/signup']
+      exclude: ['/signup', '/login']
     }
   },
 

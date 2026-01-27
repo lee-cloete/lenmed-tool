@@ -1,15 +1,23 @@
 <script setup lang="ts">
 definePageMeta({
-  middleware: 'auth'
+  layout: false
 })
 
 const supabase = useSupabaseClient()
+const user = useSupabaseUser()
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const error = ref('')
 const loading = ref(false)
 const success = ref(false)
+
+// Redirect if already logged in
+watchEffect(() => {
+  if (user.value) {
+    navigateTo('/')
+  }
+})
 
 const handleSubmit = async () => {
   error.value = ''
