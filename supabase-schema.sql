@@ -1,16 +1,23 @@
 -- Lenmed Doctor-Hospital Management System
 -- Database Schema for Supabase
+-- Based on flume_expanded.csv structure
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Doctors table
+-- Doctors table (matches CSV structure)
 CREATE TABLE IF NOT EXISTS doctors (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
-  specialty TEXT,
-  email TEXT,
-  phone TEXT,
+  title TEXT,                          -- Dr, Mrs, Ms, Prof, etc.
+  full_name TEXT NOT NULL,             -- Dr Full Name from CSV
+  disciplines TEXT,                    -- Doctors Disciplines (pipe-separated)
+  phone1 TEXT,                         -- wpcf-doctor-telephone
+  phone2 TEXT,                         -- wpcf-doctor-telephone-2
+  phone3 TEXT,                         -- wpcf-doctor-telephone-3
+  email TEXT,                          -- wpcf-contact-email
+  bio_link BOOLEAN DEFAULT false,      -- wpcf-display-bio-link
+  permalink TEXT,                      -- Permalink
+  status TEXT DEFAULT 'publish',       -- Status
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
@@ -19,7 +26,7 @@ CREATE TABLE IF NOT EXISTS doctors (
 -- Hospitals table
 CREATE TABLE IF NOT EXISTS hospitals (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL,                  -- Hospital Name from CSV
   address TEXT,
   city TEXT,
   phone TEXT,
@@ -30,6 +37,7 @@ CREATE TABLE IF NOT EXISTS hospitals (
 );
 
 -- Doctor-Hospital relationship (many-to-many)
+-- A doctor can work at multiple hospitals
 CREATE TABLE IF NOT EXISTS doctor_hospitals (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   doctor_id UUID NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
@@ -39,7 +47,8 @@ CREATE TABLE IF NOT EXISTS doctor_hospitals (
 );
 
 -- Create indexes for better query performance
-CREATE INDEX IF NOT EXISTS idx_doctors_name ON doctors(name);
+CREATE INDEX IF NOT EXISTS idx_doctors_full_name ON doctors(full_name);
+CREATE INDEX IF NOT EXISTS idx_doctors_disciplines ON doctors(disciplines);
 CREATE INDEX IF NOT EXISTS idx_hospitals_name ON hospitals(name);
 CREATE INDEX IF NOT EXISTS idx_doctor_hospitals_doctor ON doctor_hospitals(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_doctor_hospitals_hospital ON doctor_hospitals(hospital_id);
