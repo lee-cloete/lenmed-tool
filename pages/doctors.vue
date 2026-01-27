@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Plus, Pencil, Trash2, X, Search, RotateCcw, CirclePlus, RefreshCw, Trash } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, X, Search, RotateCcw, CirclePlus, RefreshCw, Trash, Clock, User } from 'lucide-vue-next'
 
 const supabase = useSupabaseClient()
+const user = useSupabaseUser()
 
 type DoctorStatus = 'new' | 'updated' | 'deleted' | null
 
@@ -10,6 +11,20 @@ const normalizeStatus = (status: string | null): DoctorStatus => {
   if (status === 'publish' || !status) return null
   if (status === 'new' || status === 'updated' || status === 'deleted') return status
   return null
+}
+
+// Format date to South African time (SAST - UTC+2)
+const formatSATime = (dateStr: string | null): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 interface Doctor {
@@ -25,6 +40,10 @@ interface Doctor {
   permalink: string
   notes: string
   status: DoctorStatus
+  created_at: string | null
+  created_by: string | null
+  updated_at: string | null
+  updated_by: string | null
 }
 
 const doctors = ref<Doctor[]>([])
@@ -108,9 +127,17 @@ const fetchDoctors = async () => {
 
 const handleSubmit = async () => {
   try {
+    const userEmail = user.value?.email || 'unknown'
+    const now = new Date().toISOString()
+
     if (editingDoctor.value) {
       // Update existing doctor and set status to 'updated'
-      const updateData = { ...formData.value, status: 'updated' }
+      const updateData = {
+        ...formData.value,
+        status: 'updated',
+        updated_at: now,
+        updated_by: userEmail
+      }
       const { error } = await supabase
         .from('doctors')
         .update(updateData)
@@ -119,7 +146,12 @@ const handleSubmit = async () => {
       if (error) throw error
     } else {
       // Create new doctor with status 'new'
-      const insertData = { ...formData.value, status: 'new' }
+      const insertData = {
+        ...formData.value,
+        status: 'new',
+        created_at: now,
+        created_by: userEmail
+      }
       const { error } = await supabase
         .from('doctors')
         .insert([insertData])
@@ -158,10 +190,17 @@ const handleDelete = async (id: string) => {
   if (!confirm('Are you sure you want to mark this doctor for removal?')) return
 
   try {
-    // Soft delete - mark status as 'deleted' instead of actually deleting
+    const userEmail = user.value?.email || 'unknown'
+    const now = new Date().toISOString()
+
+    // Soft delete - mark status as 'deleted' and track who/when
     const { error } = await supabase
       .from('doctors')
-      .update({ status: 'deleted' })
+      .update({
+        status: 'deleted',
+        updated_at: now,
+        updated_by: userEmail
+      })
       .eq('id', id)
     if (error) throw error
     fetchDoctors()
@@ -173,9 +212,17 @@ const handleDelete = async (id: string) => {
 
 const handleRestore = async (id: string) => {
   try {
+    const userEmail = user.value?.email || 'unknown'
+    const now = new Date().toISOString()
+
+    // Restore clears status but keeps tracking info
     const { error } = await supabase
       .from('doctors')
-      .update({ status: null })
+      .update({
+        status: null,
+        updated_at: now,
+        updated_by: userEmail
+      })
       .eq('id', id)
     if (error) throw error
     fetchDoctors()
@@ -200,9 +247,17 @@ const handlePermanentDelete = async (id: string) => {
 
 const clearStatus = async (id: string) => {
   try {
+    const userEmail = user.value?.email || 'unknown'
+    const now = new Date().toISOString()
+
+    // Clear status but keep tracking info (updated_at/by persists)
     const { error } = await supabase
       .from('doctors')
-      .update({ status: null })
+      .update({
+        status: null,
+        updated_at: now,
+        updated_by: userEmail
+      })
       .eq('id', id)
     if (error) throw error
     fetchDoctors()
@@ -337,8 +392,7 @@ onMounted(fetchDoctors)
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Title</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Full Name</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Disciplines</th>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Email</th>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Phone</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Last Updated (SAST)</th>
             <th class="text-right px-6 py-3 text-sm font-medium text-lenmed-grey">Actions</th>
           </tr>
         </thead>
@@ -390,11 +444,27 @@ onMounted(fetchDoctors)
                 </span>
               </div>
             </td>
-            <td :class="['px-6 py-4', doctor.status === 'deleted' ? 'text-gray-400' : 'text-lenmed-grey']">
-              {{ doctor.email || '-' }}
-            </td>
-            <td :class="['px-6 py-4', doctor.status === 'deleted' ? 'text-gray-400' : 'text-lenmed-grey']">
-              {{ doctor.phone1 || '-' }}
+            <!-- Last Updated Column -->
+            <td class="px-6 py-4">
+              <div v-if="doctor.updated_at || doctor.created_at" class="text-xs space-y-1">
+                <div v-if="doctor.updated_at" class="flex items-center gap-1 text-lenmed-grey">
+                  <Clock :size="12" />
+                  <span>{{ formatSATime(doctor.updated_at) }}</span>
+                </div>
+                <div v-else-if="doctor.created_at" class="flex items-center gap-1 text-lenmed-grey">
+                  <Clock :size="12" />
+                  <span>{{ formatSATime(doctor.created_at) }}</span>
+                </div>
+                <div v-if="doctor.updated_by" class="flex items-center gap-1 text-gray-400">
+                  <User :size="12" />
+                  <span class="truncate max-w-[120px]" :title="doctor.updated_by">{{ doctor.updated_by }}</span>
+                </div>
+                <div v-else-if="doctor.created_by" class="flex items-center gap-1 text-gray-400">
+                  <User :size="12" />
+                  <span class="truncate max-w-[120px]" :title="doctor.created_by">{{ doctor.created_by }}</span>
+                </div>
+              </div>
+              <span v-else class="text-gray-400 text-sm">-</span>
             </td>
             <td class="px-6 py-4">
               <div class="flex items-center justify-end gap-1">
