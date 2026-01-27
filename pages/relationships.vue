@@ -186,7 +186,7 @@ onMounted(fetchData)
         <tbody class="divide-y">
           <tr v-for="rel in relationships" :key="rel.id" class="hover:bg-gray-50">
             <td class="px-6 py-4 font-medium text-lenmed-navy">
-              {{ rel.doctors?.title }} {{ rel.doctors?.full_name || 'Unknown' }}
+              {{ rel.doctors?.full_name || rel.doctors?.title || 'Unknown' }}
             </td>
             <td class="px-6 py-4 text-lenmed-grey text-sm">
               {{ rel.doctors?.disciplines || '-' }}
@@ -231,7 +231,7 @@ onMounted(fetchData)
                 class="inline-flex items-center gap-1 bg-lenmed-blue/10 text-lenmed-blue px-3 py-1 rounded-full text-sm"
               >
                 <Users :size="14" />
-                {{ doctor.title }} {{ doctor.full_name }}
+                {{ doctor.full_name || doctor.title }}
               </span>
             </div>
             <p v-else class="text-sm text-gray-400 italic">No doctors linked</p>
@@ -250,7 +250,7 @@ onMounted(fetchData)
         </h3>
         <div class="space-y-4">
           <div v-for="doctor in relationshipsByDoctor" :key="doctor.id" class="border rounded-lg p-4">
-            <h4 class="font-medium text-lenmed-navy">{{ doctor.title }} {{ doctor.full_name }}</h4>
+            <h4 class="font-medium text-lenmed-navy">{{ doctor.full_name || doctor.title }}</h4>
             <p class="text-sm text-lenmed-grey mb-2">{{ doctor.disciplines }}</p>
             <div v-if="doctor.hospitals.length > 0" class="flex flex-wrap gap-2 mt-2">
               <span
@@ -290,7 +290,7 @@ onMounted(fetchData)
             >
               <option value="">Choose a doctor...</option>
               <option v-for="doctor in doctors" :key="doctor.id" :value="doctor.id">
-                {{ doctor.title }} {{ doctor.full_name }}
+                {{ doctor.full_name || doctor.title }}
                 {{ doctor.disciplines ? `(${doctor.disciplines})` : '' }}
               </option>
             </select>
