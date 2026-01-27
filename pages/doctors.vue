@@ -369,7 +369,7 @@ onMounted(fetchDoctors)
             </td>
             <td class="px-6 py-4">
               <div :class="['font-medium', doctor.status === 'deleted' ? 'text-gray-400 line-through' : 'text-lenmed-navy']">
-                {{ doctor.title }} {{ doctor.full_name }}
+                {{ doctor.full_name || doctor.title }}
               </div>
             </td>
             <td class="px-6 py-4 text-lenmed-grey text-sm">
