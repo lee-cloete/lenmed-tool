@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-lenmed-navy: #1B4681;
+  --color-lenmed-blue: #54B9E2;
+  --color-lenmed-green: #A5CC79;
+  --color-lenmed-white: #FFFFFF;
+  --color-lenmed-grey: #4B4C4D;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
