@@ -33,10 +33,7 @@ watch(() => route.path, () => {
           <!-- Logo and Brand -->
           <div class="flex items-center gap-3">
             <img src="/lenlogo.png" alt="Lenmed" class="h-10 w-auto" />
-            <div class="hidden sm:block">
-              <span class="text-xl font-bold text-lenmed-navy">Lenmed</span>
-              <span class="text-xs text-gray-500 block -mt-1">Doctor Management</span>
-            </div>
+            <span class="hidden sm:block text-sm text-gray-500">Doctor Management</span>
           </div>
 
           <!-- Desktop Navigation -->
