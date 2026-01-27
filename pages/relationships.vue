@@ -176,7 +176,8 @@ onMounted(fetchData)
       <table v-else class="w-full">
         <thead class="bg-gray-50 border-b">
           <tr>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Doctor</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Title</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Full Name</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Disciplines</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Hospital</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">City</th>
@@ -185,8 +186,11 @@ onMounted(fetchData)
         </thead>
         <tbody class="divide-y">
           <tr v-for="rel in relationships" :key="rel.id" class="hover:bg-gray-50">
+            <td class="px-6 py-4 text-lenmed-grey">
+              {{ rel.doctors?.title || '-' }}
+            </td>
             <td class="px-6 py-4 font-medium text-lenmed-navy">
-              {{ rel.doctors?.full_name || rel.doctors?.title || 'Unknown' }}
+              {{ rel.doctors?.full_name || '-' }}
             </td>
             <td class="px-6 py-4 text-lenmed-grey text-sm">
               {{ rel.doctors?.disciplines || '-' }}

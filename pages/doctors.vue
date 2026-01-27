@@ -334,7 +334,8 @@ onMounted(fetchDoctors)
         <thead class="bg-gray-50 border-b">
           <tr>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Status</th>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Name</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Title</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Full Name</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Disciplines</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Email</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Phone</th>
@@ -367,9 +368,12 @@ onMounted(fetchDoctors)
               </div>
               <span v-else class="text-gray-400 text-sm">-</span>
             </td>
+            <td :class="['px-6 py-4', doctor.status === 'deleted' ? 'text-gray-400' : 'text-lenmed-grey']">
+              {{ doctor.title || '-' }}
+            </td>
             <td class="px-6 py-4">
               <div :class="['font-medium', doctor.status === 'deleted' ? 'text-gray-400 line-through' : 'text-lenmed-navy']">
-                {{ doctor.full_name || doctor.title }}
+                {{ doctor.full_name || '-' }}
               </div>
             </td>
             <td class="px-6 py-4 text-lenmed-grey text-sm">
