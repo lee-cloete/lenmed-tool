@@ -12,6 +12,7 @@
   "dependencies": {
     "@nuxtjs/supabase": "^1.5.0",
     "@nuxtjs/tailwindcss": "^6.14.0",
+    "@supabase/supabase-js": "^2.93.1",
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
     "lucide-vue-next": "^0.469.0",
