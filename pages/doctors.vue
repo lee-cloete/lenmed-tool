@@ -5,6 +5,13 @@ const supabase = useSupabaseClient()
 
 type DoctorStatus = 'new' | 'updated' | 'deleted' | null
 
+// Normalize status - treat 'publish' (old WordPress value) as null
+const normalizeStatus = (status: string | null): DoctorStatus => {
+  if (status === 'publish' || !status) return null
+  if (status === 'new' || status === 'updated' || status === 'deleted') return status
+  return null
+}
+
 interface Doctor {
   id: string
   title: string
@@ -87,7 +94,11 @@ const fetchDoctors = async () => {
       .order('full_name')
 
     if (error) throw error
-    doctors.value = data || []
+    // Normalize status values when loading
+    doctors.value = (data || []).map(doc => ({
+      ...doc,
+      status: normalizeStatus(doc.status)
+    }))
   } catch (error) {
     console.error('Error fetching doctors:', error)
   } finally {
@@ -358,7 +369,7 @@ onMounted(fetchDoctors)
             </td>
             <td class="px-6 py-4">
               <div :class="['font-medium', doctor.status === 'deleted' ? 'text-gray-400 line-through' : 'text-lenmed-navy']">
-                {{ doctor.title }} {{ doctor.full_name }}
+                {{ doctor.full_name || doctor.title }}
               </div>
             </td>
             <td class="px-6 py-4 text-lenmed-grey text-sm">
