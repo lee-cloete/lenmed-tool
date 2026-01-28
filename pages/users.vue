@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { Plus, Trash2, X, Users, Shield, Mail, Clock, User } from 'lucide-vue-next'
+import { Plus, Trash2, X, Users, Shield, Mail, Clock, User, Building2 } from 'lucide-vue-next'
 
 const supabase = useSupabaseClient()
 const currentUser = useSupabaseUser()
+
+interface Hospital {
+  id: string
+  name: string
+  city: string
+}
 
 interface UserProfile {
   id: string
@@ -10,11 +16,14 @@ interface UserProfile {
   email: string
   display_name: string | null
   role: string
+  hospital_id: string | null
+  hospitals?: Hospital
   created_at: string
   created_by: string | null
 }
 
 const users = ref<UserProfile[]>([])
+const hospitals = ref<Hospital[]>([])
 const loading = ref(true)
 const showModal = ref(false)
 const showInviteModal = ref(false)
@@ -23,11 +32,13 @@ const formData = ref({
   email: '',
   password: '',
   display_name: '',
-  role: 'user'
+  role: 'user',
+  hospital_id: '' as string | null
 })
 
 const inviteEmail = ref('')
 const inviteRole = ref('user')
+const inviteHospitalId = ref<string | null>(null)
 
 // Format date to South African time
 const formatSATime = (dateStr: string | null): string => {
@@ -43,11 +54,28 @@ const formatSATime = (dateStr: string | null): string => {
   })
 }
 
+const fetchHospitals = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('hospitals')
+      .select('id, name, city')
+      .order('name')
+
+    if (error) throw error
+    hospitals.value = data || []
+  } catch (error) {
+    console.error('Error fetching hospitals:', error)
+  }
+}
+
 const fetchUsers = async () => {
   try {
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('*')
+      .select(`
+        *,
+        hospitals (id, name, city)
+      `)
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -89,6 +117,7 @@ const handleCreateUser = async () => {
           email: formData.value.email,
           display_name: formData.value.display_name || null,
           role: formData.value.role,
+          hospital_id: formData.value.hospital_id || null,
           created_by: currentUser.value?.email || 'unknown'
         })
       }
@@ -99,12 +128,13 @@ const handleCreateUser = async () => {
         email: formData.value.email,
         display_name: formData.value.display_name || null,
         role: formData.value.role,
+        hospital_id: formData.value.hospital_id || null,
         created_by: currentUser.value?.email || 'unknown'
       })
     }
 
     showModal.value = false
-    formData.value = { email: '', password: '', display_name: '', role: 'user' }
+    formData.value = { email: '', password: '', display_name: '', role: 'user', hospital_id: null }
     fetchUsers()
     alert('User created successfully! They can now log in.')
   } catch (error: any) {
@@ -135,12 +165,14 @@ const handleInviteUser = async () => {
       user_id: null, // Will be updated when user confirms
       email: inviteEmail.value,
       role: inviteRole.value,
+      hospital_id: inviteHospitalId.value || null,
       created_by: currentUser.value?.email || 'unknown'
     })
 
     showInviteModal.value = false
     inviteEmail.value = ''
     inviteRole.value = 'user'
+    inviteHospitalId.value = null
     fetchUsers()
     alert('Invite sent! The user will receive an email to set up their account.')
   } catch (error: any) {
@@ -161,6 +193,21 @@ const handleUpdateRole = async (userId: string, newRole: string) => {
   } catch (error: any) {
     console.error('Error updating role:', error)
     alert('Error updating role: ' + error.message)
+  }
+}
+
+const handleUpdateHospital = async (userId: string, hospitalId: string | null) => {
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ hospital_id: hospitalId || null })
+      .eq('id', userId)
+
+    if (error) throw error
+    fetchUsers()
+  } catch (error: any) {
+    console.error('Error updating hospital:', error)
+    alert('Error updating hospital: ' + error.message)
   }
 }
 
@@ -195,7 +242,10 @@ const getRoleBadge = (role: string) => {
   }
 }
 
-onMounted(fetchUsers)
+onMounted(() => {
+  fetchHospitals()
+  fetchUsers()
+})
 </script>
 
 <template>
@@ -231,6 +281,7 @@ onMounted(fetchUsers)
           <tr>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">User</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Role</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Hospital (Edit Access)</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Added</th>
             <th class="text-right px-6 py-3 text-sm font-medium text-lenmed-grey">Actions</th>
           </tr>
@@ -266,6 +317,23 @@ onMounted(fetchUsers)
                 <option value="admin">Admin</option>
                 <option value="user">User</option>
                 <option value="viewer">Viewer</option>
+              </select>
+            </td>
+            <td class="px-6 py-4">
+              <select
+                :value="user.hospital_id || ''"
+                @change="handleUpdateHospital(user.id, ($event.target as HTMLSelectElement).value || null)"
+                :disabled="user.email === currentUser?.email"
+                :class="[
+                  'px-3 py-1 rounded-lg text-sm border cursor-pointer',
+                  user.hospital_id ? 'bg-lenmed-blue/10 text-lenmed-blue border-lenmed-blue/20' : 'bg-gray-50 text-gray-500 border-gray-200',
+                  user.email === currentUser?.email ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+              >
+                <option value="">All Hospitals (Admin)</option>
+                <option v-for="hospital in hospitals" :key="hospital.id" :value="hospital.id">
+                  {{ hospital.name }}
+                </option>
               </select>
             </td>
             <td class="px-6 py-4 text-sm text-lenmed-grey">
@@ -345,6 +413,22 @@ onMounted(fetchUsers)
               <option value="viewer">Viewer - Read only</option>
             </select>
           </div>
+          <div>
+            <label class="block text-sm font-medium text-lenmed-grey mb-1">
+              Assigned Hospital
+              <span class="text-gray-400 font-normal">(for edit access)</span>
+            </label>
+            <select
+              v-model="formData.hospital_id"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lenmed-blue focus:border-transparent outline-none"
+            >
+              <option value="">All Hospitals (Admin access)</option>
+              <option v-for="hospital in hospitals" :key="hospital.id" :value="hospital.id">
+                {{ hospital.name }} {{ hospital.city ? `(${hospital.city})` : '' }}
+              </option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">User can only edit doctors at this hospital</p>
+          </div>
           <div class="flex gap-3 pt-2">
             <button
               type="button"
@@ -395,6 +479,18 @@ onMounted(fetchUsers)
               <option value="admin">Admin</option>
               <option value="user">User</option>
               <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-lenmed-grey mb-1">Assigned Hospital</label>
+            <select
+              v-model="inviteHospitalId"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lenmed-blue focus:border-transparent outline-none"
+            >
+              <option :value="null">All Hospitals</option>
+              <option v-for="hospital in hospitals" :key="hospital.id" :value="hospital.id">
+                {{ hospital.name }} {{ hospital.city ? `(${hospital.city})` : '' }}
+              </option>
             </select>
           </div>
           <div class="flex gap-3 pt-2">
