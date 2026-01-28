@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Pencil, Trash2, X, Search, RotateCcw, CirclePlus, RefreshCw, Trash, Clock, User } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, X, Search, RotateCcw, CirclePlus, RefreshCw, Trash, Clock, User, History, ChevronDown, ChevronUp } from 'lucide-vue-next'
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
@@ -27,6 +27,19 @@ const formatSATime = (dateStr: string | null): string => {
   })
 }
 
+// Format date shorter for history
+const formatSATimeShort = (dateStr: string | null): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 interface Doctor {
   id: string
   title: string
@@ -46,12 +59,92 @@ interface Doctor {
   updated_by: string | null
 }
 
+interface HistoryEntry {
+  id: string
+  doctor_id: string
+  action: string
+  changes: Record<string, { old: any; new: any }> | null
+  changed_by: string
+  changed_at: string
+}
+
 const doctors = ref<Doctor[]>([])
 const loading = ref(true)
 const showModal = ref(false)
 const editingDoctor = ref<Doctor | null>(null)
 const searchTerm = ref('')
 const statusFilter = ref<string>('all')
+const expandedHistoryId = ref<string | null>(null)
+const doctorHistory = ref<Record<string, HistoryEntry[]>>({})
+
+// Log history entry
+const logHistory = async (doctorId: string, action: string, changes: Record<string, { old: any; new: any }> | null = null) => {
+  try {
+    const { error } = await supabase.from('doctor_history').insert({
+      doctor_id: doctorId,
+      action,
+      changes,
+      changed_by: user.value?.email || 'unknown'
+    })
+    if (error) console.error('Error logging history:', error)
+  } catch (err) {
+    console.error('Error logging history:', err)
+  }
+}
+
+// Fetch history for a doctor
+const fetchDoctorHistory = async (doctorId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('doctor_history')
+      .select('*')
+      .eq('doctor_id', doctorId)
+      .order('changed_at', { ascending: false })
+      .limit(5)
+
+    if (error) throw error
+    doctorHistory.value[doctorId] = data || []
+  } catch (err) {
+    console.error('Error fetching history:', err)
+    doctorHistory.value[doctorId] = []
+  }
+}
+
+// Toggle history dropdown
+const toggleHistory = async (doctorId: string) => {
+  if (expandedHistoryId.value === doctorId) {
+    expandedHistoryId.value = null
+  } else {
+    expandedHistoryId.value = doctorId
+    if (!doctorHistory.value[doctorId]) {
+      await fetchDoctorHistory(doctorId)
+    }
+  }
+}
+
+// Get action color
+const getActionColor = (action: string) => {
+  switch (action) {
+    case 'created': return 'text-green-600 bg-green-50'
+    case 'updated': return 'text-yellow-600 bg-yellow-50'
+    case 'deleted': return 'text-red-600 bg-red-50'
+    case 'restored': return 'text-blue-600 bg-blue-50'
+    default: return 'text-gray-600 bg-gray-50'
+  }
+}
+
+// Calculate changes between old and new doctor data
+const calculateChanges = (oldData: any, newData: any): Record<string, { old: any; new: any }> => {
+  const changes: Record<string, { old: any; new: any }> = {}
+  const fieldsToTrack = ['title', 'full_name', 'disciplines', 'phone1', 'phone2', 'phone3', 'email', 'notes', 'status']
+
+  for (const field of fieldsToTrack) {
+    if (oldData[field] !== newData[field]) {
+      changes[field] = { old: oldData[field] || '', new: newData[field] || '' }
+    }
+  }
+  return changes
+}
 
 const formData = ref({
   title: '',
@@ -131,6 +224,9 @@ const handleSubmit = async () => {
     const now = new Date().toISOString()
 
     if (editingDoctor.value) {
+      // Calculate what changed
+      const changes = calculateChanges(editingDoctor.value, formData.value)
+
       // Update existing doctor and set status to 'updated'
       const updateData = {
         ...formData.value,
@@ -144,6 +240,9 @@ const handleSubmit = async () => {
         .eq('id', editingDoctor.value.id)
 
       if (error) throw error
+
+      // Log history with changes
+      await logHistory(editingDoctor.value.id, 'updated', Object.keys(changes).length > 0 ? changes : null)
     } else {
       // Create new doctor with status 'new'
       const insertData = {
@@ -152,11 +251,18 @@ const handleSubmit = async () => {
         created_at: now,
         created_by: userEmail
       }
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('doctors')
         .insert([insertData])
+        .select('id')
+        .single()
 
       if (error) throw error
+
+      // Log history for new doctor
+      if (data?.id) {
+        await logHistory(data.id, 'created', null)
+      }
     }
 
     showModal.value = false
@@ -203,6 +309,9 @@ const handleDelete = async (id: string) => {
       })
       .eq('id', id)
     if (error) throw error
+
+    // Log history
+    await logHistory(id, 'deleted', null)
     fetchDoctors()
   } catch (error: any) {
     console.error('Error marking doctor for removal:', error)
@@ -225,6 +334,9 @@ const handleRestore = async (id: string) => {
       })
       .eq('id', id)
     if (error) throw error
+
+    // Log history
+    await logHistory(id, 'restored', null)
     fetchDoctors()
   } catch (error: any) {
     console.error('Error restoring doctor:', error)
@@ -496,6 +608,16 @@ onMounted(fetchDoctors)
                     <X :size="16" />
                   </button>
                   <button
+                    @click="toggleHistory(doctor.id)"
+                    :class="[
+                      'p-2 rounded-lg transition-colors',
+                      expandedHistoryId === doctor.id ? 'text-purple-600 bg-purple-50' : 'text-gray-400 hover:bg-gray-100'
+                    ]"
+                    title="View history"
+                  >
+                    <History :size="18" />
+                  </button>
+                  <button
                     @click="handleEdit(doctor)"
                     class="p-2 text-lenmed-blue hover:bg-lenmed-blue/10 rounded-lg transition-colors"
                     title="Edit doctor"
@@ -510,6 +632,42 @@ onMounted(fetchDoctors)
                     <Trash2 :size="18" />
                   </button>
                 </template>
+              </div>
+            </td>
+          </tr>
+          <!-- History Expanded Row -->
+          <tr v-if="expandedHistoryId === doctor.id" class="bg-purple-50/30">
+            <td colspan="6" class="px-6 py-4">
+              <div class="ml-4 border-l-2 border-purple-200 pl-4">
+                <h4 class="text-sm font-medium text-purple-700 mb-3 flex items-center gap-2">
+                  <History :size="16" />
+                  Recent Changes
+                </h4>
+                <div v-if="!doctorHistory[doctor.id]" class="text-sm text-gray-500">Loading...</div>
+                <div v-else-if="doctorHistory[doctor.id].length === 0" class="text-sm text-gray-500">No history recorded yet</div>
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="entry in doctorHistory[doctor.id]"
+                    :key="entry.id"
+                    class="bg-white rounded-lg p-3 border border-gray-100 shadow-sm"
+                  >
+                    <div class="flex items-center justify-between mb-2">
+                      <span :class="['px-2 py-0.5 rounded text-xs font-medium capitalize', getActionColor(entry.action)]">
+                        {{ entry.action }}
+                      </span>
+                      <span class="text-xs text-gray-500">{{ formatSATimeShort(entry.changed_at) }}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mb-1">By: {{ entry.changed_by }}</div>
+                    <div v-if="entry.changes && Object.keys(entry.changes).length > 0" class="mt-2 space-y-1">
+                      <div v-for="(change, field) in entry.changes" :key="field" class="text-xs">
+                        <span class="font-medium text-gray-600 capitalize">{{ field }}:</span>
+                        <span class="text-red-500 line-through ml-1">{{ change.old || '(empty)' }}</span>
+                        <span class="mx-1">→</span>
+                        <span class="text-green-600">{{ change.new || '(empty)' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </td>
           </tr>

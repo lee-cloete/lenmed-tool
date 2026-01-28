@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Home, Users, Building2, Link2, LogOut, Menu, X } from 'lucide-vue-next'
+import { Home, Users, Building2, Link2, LogOut, Menu, X, UserCog } from 'lucide-vue-next'
 
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/doctors', icon: Users, label: 'Doctors' },
   { path: '/hospitals', icon: Building2, label: 'Hospitals' },
   { path: '/relationships', icon: Link2, label: 'Relationships' },
+  { path: '/users', icon: UserCog, label: 'Users' },
 ]
 
 const handleSignOut = async () => {
