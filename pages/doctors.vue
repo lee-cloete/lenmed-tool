@@ -508,170 +508,225 @@ onMounted(fetchDoctors)
             <th class="text-right px-6 py-3 text-sm font-medium text-lenmed-grey">Actions</th>
           </tr>
         </thead>
+  
         <tbody class="divide-y">
-          <tr
-            v-for="doctor in filteredDoctors"
-            :key="doctor.id"
+  <template v-for="doctor in filteredDoctors" :key="doctor.id">
+    <tr
+      :class="[
+        'transition-colors',
+        doctor.status === 'deleted' ? 'bg-red-50/50' : 'hover:bg-gray-50'
+      ]"
+    >
+      <!-- Status Column -->
+      <td class="px-6 py-4">
+        <div v-if="getStatusBadge(doctor.status)" class="flex items-center gap-2">
+          <span :class="['w-2 h-2 rounded-full', getStatusColor(doctor.status)]"></span>
+          <span
             :class="[
-              'transition-colors',
-              doctor.status === 'deleted' ? 'bg-red-50/50' : 'hover:bg-gray-50'
+              'px-2 py-1 rounded text-xs font-medium border',
+              getStatusBadge(doctor.status)?.bg,
+              getStatusBadge(doctor.status)?.text,
+              getStatusBadge(doctor.status)?.border
             ]"
           >
-            <!-- Status Column -->
-            <td class="px-6 py-4">
-              <div v-if="getStatusBadge(doctor.status)" class="flex items-center gap-2">
-                <span :class="['w-2 h-2 rounded-full', getStatusColor(doctor.status)]"></span>
+            {{ getStatusBadge(doctor.status)?.label }}
+          </span>
+        </div>
+        <span v-else class="text-gray-400 text-sm">-</span>
+      </td>
+
+      <td :class="['px-6 py-4', doctor.status === 'deleted' ? 'text-gray-400' : 'text-lenmed-grey']">
+        {{ doctor.title || '-' }}
+      </td>
+
+      <td class="px-6 py-4">
+        <div :class="['font-medium', doctor.status === 'deleted' ? 'text-gray-400 line-through' : 'text-lenmed-navy']">
+          {{ doctor.full_name || '-' }}
+        </div>
+      </td>
+
+      <td class="px-6 py-4 text-lenmed-grey text-sm">
+        <div class="flex flex-wrap gap-1">
+          <span
+            v-for="disc in (doctor.disciplines || '').split('|').filter(Boolean)"
+            :key="disc"
+            :class="[
+              'px-2 py-0.5 rounded text-xs',
+              doctor.status === 'deleted'
+                ? 'bg-gray-100 text-gray-400'
+                : 'bg-lenmed-blue/10 text-lenmed-blue'
+            ]"
+          >
+            {{ disc }}
+          </span>
+        </div>
+      </td>
+
+      <!-- Last Updated Column -->
+      <td class="px-6 py-4">
+        <div v-if="doctor.updated_at || doctor.created_at" class="text-xs space-y-1">
+          <div v-if="doctor.updated_at" class="flex items-center gap-1 text-lenmed-grey">
+            <Clock :size="12" />
+            <span>{{ formatSATime(doctor.updated_at) }}</span>
+          </div>
+          <div v-else-if="doctor.created_at" class="flex items-center gap-1 text-lenmed-grey">
+            <Clock :size="12" />
+            <span>{{ formatSATime(doctor.created_at) }}</span>
+          </div>
+          <div v-if="doctor.updated_by" class="flex items-center gap-1 text-gray-400">
+            <User :size="12" />
+            <span class="truncate max-w-[120px]" :title="doctor.updated_by">
+              {{ doctor.updated_by }}
+            </span>
+          </div>
+          <div v-else-if="doctor.created_by" class="flex items-center gap-1 text-gray-400">
+            <User :size="12" />
+            <span class="truncate max-w-[120px]" :title="doctor.created_by">
+              {{ doctor.created_by }}
+            </span>
+          </div>
+        </div>
+        <span v-else class="text-gray-400 text-sm">-</span>
+      </td>
+
+      <!-- Actions -->
+      <td class="px-6 py-4">
+        <div class="flex items-center justify-end gap-1">
+          <template v-if="doctor.status === 'deleted'">
+            <button
+              @click="handleRestore(doctor.id)"
+              class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Restore doctor"
+            >
+              <RotateCcw :size="18" />
+            </button>
+            <button
+              @click="handlePermanentDelete(doctor.id)"
+              class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Delete permanently"
+            >
+              <Trash2 :size="18" />
+            </button>
+          </template>
+
+          <template v-else>
+            <button
+              v-if="doctor.status"
+              @click="clearStatus(doctor.id)"
+              class="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Clear status"
+            >
+              <X :size="16" />
+            </button>
+
+            <button
+              @click="toggleHistory(doctor.id)"
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                expandedHistoryId === doctor.id
+                  ? 'text-purple-600 bg-purple-50'
+                  : 'text-gray-400 hover:bg-gray-100'
+              ]"
+              title="View history"
+            >
+              <History :size="18" />
+            </button>
+
+            <button
+              @click="handleEdit(doctor)"
+              class="p-2 text-lenmed-blue hover:bg-lenmed-blue/10 rounded-lg transition-colors"
+              title="Edit doctor"
+            >
+              <Pencil :size="18" />
+            </button>
+
+            <button
+              @click="handleDelete(doctor.id)"
+              class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Mark for removal"
+            >
+              <Trash2 :size="18" />
+            </button>
+          </template>
+        </div>
+      </td>
+    </tr>
+
+    <!-- ✅ History Expanded Row (NOW IN SCOPE) -->
+    <tr v-if="expandedHistoryId === doctor.id" class="bg-purple-50/30">
+      <td colspan="6" class="px-6 py-4">
+        <div class="ml-4 border-l-2 border-purple-200 pl-4">
+          <h4 class="text-sm font-medium text-purple-700 mb-3 flex items-center gap-2">
+            <History :size="16" />
+            Recent Changes
+          </h4>
+
+          <div v-if="!doctorHistory[doctor.id]" class="text-sm text-gray-500">
+            Loading...
+          </div>
+
+          <div
+            v-else-if="doctorHistory[doctor.id].length === 0"
+            class="text-sm text-gray-500"
+          >
+            No history recorded yet
+          </div>
+
+          <div v-else class="space-y-3">
+            <div
+              v-for="entry in doctorHistory[doctor.id]"
+              :key="entry.id"
+              class="bg-white rounded-lg p-3 border border-gray-100 shadow-sm"
+            >
+              <div class="flex items-center justify-between mb-2">
                 <span
                   :class="[
-                    'px-2 py-1 rounded text-xs font-medium border',
-                    getStatusBadge(doctor.status)?.bg,
-                    getStatusBadge(doctor.status)?.text,
-                    getStatusBadge(doctor.status)?.border
+                    'px-2 py-0.5 rounded text-xs font-medium capitalize',
+                    getActionColor(entry.action)
                   ]"
                 >
-                  {{ getStatusBadge(doctor.status)?.label }}
+                  {{ entry.action }}
+                </span>
+                <span class="text-xs text-gray-500">
+                  {{ formatSATimeShort(entry.changed_at) }}
                 </span>
               </div>
-              <span v-else class="text-gray-400 text-sm">-</span>
-            </td>
-            <td :class="['px-6 py-4', doctor.status === 'deleted' ? 'text-gray-400' : 'text-lenmed-grey']">
-              {{ doctor.title || '-' }}
-            </td>
-            <td class="px-6 py-4">
-              <div :class="['font-medium', doctor.status === 'deleted' ? 'text-gray-400 line-through' : 'text-lenmed-navy']">
-                {{ doctor.full_name || '-' }}
+
+              <div class="text-xs text-gray-500 mb-1">
+                By: {{ entry.changed_by }}
               </div>
-            </td>
-            <td class="px-6 py-4 text-lenmed-grey text-sm">
-              <div class="flex flex-wrap gap-1">
-                <span
-                  v-for="disc in (doctor.disciplines || '').split('|').filter(Boolean)"
-                  :key="disc"
-                  :class="[
-                    'px-2 py-0.5 rounded text-xs',
-                    doctor.status === 'deleted' ? 'bg-gray-100 text-gray-400' : 'bg-lenmed-blue/10 text-lenmed-blue'
-                  ]"
+
+              <div
+                v-if="entry.changes && Object.keys(entry.changes).length > 0"
+                class="mt-2 space-y-1"
+              >
+                <div
+                  v-for="(change, field) in entry.changes"
+                  :key="field"
+                  class="text-xs"
                 >
-                  {{ disc }}
-                </span>
-              </div>
-            </td>
-            <!-- Last Updated Column -->
-            <td class="px-6 py-4">
-              <div v-if="doctor.updated_at || doctor.created_at" class="text-xs space-y-1">
-                <div v-if="doctor.updated_at" class="flex items-center gap-1 text-lenmed-grey">
-                  <Clock :size="12" />
-                  <span>{{ formatSATime(doctor.updated_at) }}</span>
-                </div>
-                <div v-else-if="doctor.created_at" class="flex items-center gap-1 text-lenmed-grey">
-                  <Clock :size="12" />
-                  <span>{{ formatSATime(doctor.created_at) }}</span>
-                </div>
-                <div v-if="doctor.updated_by" class="flex items-center gap-1 text-gray-400">
-                  <User :size="12" />
-                  <span class="truncate max-w-[120px]" :title="doctor.updated_by">{{ doctor.updated_by }}</span>
-                </div>
-                <div v-else-if="doctor.created_by" class="flex items-center gap-1 text-gray-400">
-                  <User :size="12" />
-                  <span class="truncate max-w-[120px]" :title="doctor.created_by">{{ doctor.created_by }}</span>
+                  <span class="font-medium text-gray-600 capitalize">
+                    {{ field }}:
+                  </span>
+                  <span class="text-red-500 line-through ml-1">
+                    {{ change.old || '(empty)' }}
+                  </span>
+                  <span class="mx-1">→</span>
+                  <span class="text-green-600">
+                    {{ change.new || '(empty)' }}
+                  </span>
                 </div>
               </div>
-              <span v-else class="text-gray-400 text-sm">-</span>
-            </td>
-            <td class="px-6 py-4">
-              <div class="flex items-center justify-end gap-1">
-                <!-- Actions for deleted doctors -->
-                <template v-if="doctor.status === 'deleted'">
-                  <button
-                    @click="handleRestore(doctor.id)"
-                    class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    title="Restore doctor"
-                  >
-                    <RotateCcw :size="18" />
-                  </button>
-                  <button
-                    @click="handlePermanentDelete(doctor.id)"
-                    class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete permanently"
-                  >
-                    <Trash2 :size="18" />
-                  </button>
-                </template>
-                <!-- Normal actions -->
-                <template v-else>
-                  <button
-                    v-if="doctor.status"
-                    @click="clearStatus(doctor.id)"
-                    class="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Clear status"
-                  >
-                    <X :size="16" />
-                  </button>
-                  <button
-                    @click="toggleHistory(doctor.id)"
-                    :class="[
-                      'p-2 rounded-lg transition-colors',
-                      expandedHistoryId === doctor.id ? 'text-purple-600 bg-purple-50' : 'text-gray-400 hover:bg-gray-100'
-                    ]"
-                    title="View history"
-                  >
-                    <History :size="18" />
-                  </button>
-                  <button
-                    @click="handleEdit(doctor)"
-                    class="p-2 text-lenmed-blue hover:bg-lenmed-blue/10 rounded-lg transition-colors"
-                    title="Edit doctor"
-                  >
-                    <Pencil :size="18" />
-                  </button>
-                  <button
-                    @click="handleDelete(doctor.id)"
-                    class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Mark for removal"
-                  >
-                    <Trash2 :size="18" />
-                  </button>
-                </template>
-              </div>
-            </td>
-          </tr>
-          <!-- History Expanded Row -->
-          <tr v-if="expandedHistoryId === doctor.id" class="bg-purple-50/30">
-            <td colspan="6" class="px-6 py-4">
-              <div class="ml-4 border-l-2 border-purple-200 pl-4">
-                <h4 class="text-sm font-medium text-purple-700 mb-3 flex items-center gap-2">
-                  <History :size="16" />
-                  Recent Changes
-                </h4>
-                <div v-if="!doctorHistory[doctor.id]" class="text-sm text-gray-500">Loading...</div>
-                <div v-else-if="doctorHistory[doctor.id].length === 0" class="text-sm text-gray-500">No history recorded yet</div>
-                <div v-else class="space-y-3">
-                  <div
-                    v-for="entry in doctorHistory[doctor.id]"
-                    :key="entry.id"
-                    class="bg-white rounded-lg p-3 border border-gray-100 shadow-sm"
-                  >
-                    <div class="flex items-center justify-between mb-2">
-                      <span :class="['px-2 py-0.5 rounded text-xs font-medium capitalize', getActionColor(entry.action)]">
-                        {{ entry.action }}
-                      </span>
-                      <span class="text-xs text-gray-500">{{ formatSATimeShort(entry.changed_at) }}</span>
-                    </div>
-                    <div class="text-xs text-gray-500 mb-1">By: {{ entry.changed_by }}</div>
-                    <div v-if="entry.changes && Object.keys(entry.changes).length > 0" class="mt-2 space-y-1">
-                      <div v-for="(change, field) in entry.changes" :key="field" class="text-xs">
-                        <span class="font-medium text-gray-600 capitalize">{{ field }}:</span>
-                        <span class="text-red-500 line-through ml-1">{{ change.old || '(empty)' }}</span>
-                        <span class="mx-1">→</span>
-                        <span class="text-green-600">{{ change.new || '(empty)' }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </template>
+</tbody>
+
+
+
       </table>
     </div>
 
