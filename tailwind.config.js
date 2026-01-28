@@ -16,6 +16,7 @@ export default {
         'lenmed-grey': '#4B4C4D',
       }
     }
+    
   },
   plugins: []
 }
