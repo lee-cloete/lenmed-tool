@@ -1,8 +1,99 @@
 <script setup lang="ts">
-import { Plus, Pencil, Trash2, X, Search, RotateCcw, CirclePlus, RefreshCw, Trash, Clock, User, History, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, X, Search, RotateCcw, CirclePlus, RefreshCw, Trash, Clock, User, History, ChevronDown, ChevronUp, Check } from 'lucide-vue-next'
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
+
+// Disciplines list
+const DISCIPLINES = [
+  'Anaesthetist',
+  'Anesthesiologist',
+  'Audiologist',
+  'Audiologist & Speech Therapist',
+  'Biokineticist',
+  'Cardiac Electrophysiologist',
+  'Cardiac Technologist',
+  'Cardiologist',
+  'Cardiothoracic Surgeon',
+  'Child & Adolescent Psychiatrist',
+  'Clinical Psychologist',
+  'Counseling Psychologist',
+  'Dentist',
+  'Dermatologist',
+  'Dietician',
+  'Educational Psychologist',
+  'Emergency Medicine',
+  'Endocrinologist',
+  'Family Medicine',
+  'Family Physician',
+  'Gastroenterologist',
+  'General Practitioner',
+  'General Surgeon',
+  'Geriatric Medicine',
+  'Gynaecological Oncologist',
+  'Gynaecologist',
+  'Hepatobiliary Surgeon',
+  'Infectious Disease',
+  'Intensivist',
+  'Interventional Cardiologist',
+  'Interventional Radiologist',
+  'Maxillofacial & Oral Surgeon',
+  'Medical Oncologist',
+  'Nephrologist',
+  'Neurologist',
+  'Neurophysiologist',
+  'Neuropsychologist',
+  'Neurosurgeon',
+  'Nuclear Medicine',
+  'Nutritionist',
+  'Obstetrician',
+  'Obstetrician & Gynaecologist',
+  'Occupational Health',
+  'Occupational Therapist',
+  'Oncologist (Medical or Radiation)',
+  'Ophthalmologist',
+  'Optometrist',
+  'Orthopaedic Surgeon',
+  'Orthotist',
+  'Orthotist & Prosthetist',
+  'Paediatric Cardiologist',
+  'Paediatric Endocrinologist',
+  'Paediatric Geneticist',
+  'Paediatric Haematologist',
+  'Paediatric Intensivist',
+  'Paediatric Neurologist',
+  'Paediatric Oncologist',
+  'Paediatric Orthopaedic Surgeon',
+  'Paediatric Pulmonologist',
+  'Paediatric Surgeon',
+  'Paediatrician',
+  'Pathologist',
+  'Physician (Internal Medicine)',
+  'Physiotherapist',
+  'Plastic & Reconstructive Surgeon',
+  'Podiatrist',
+  'Proctologist',
+  'Psychiatrist',
+  'Psychologist',
+  'Pulmonologist',
+  'Radiation Oncologist',
+  'Radiographer (Theatre)',
+  'Radiologist',
+  'Rheumatologist',
+  'Social Worker',
+  'Speech Therapist',
+  'Surgeon',
+  'Transplant Surgeon',
+  'Urologist',
+  'Vascular Surgeon'
+]
+
+// User profile for permission checking
+interface UserProfile {
+  hospital_id: string | null
+  role: string
+}
+const userProfile = ref<UserProfile | null>(null)
 
 type DoctorStatus = 'new' | 'updated' | 'deleted' | null
 
@@ -69,6 +160,7 @@ interface HistoryEntry {
 }
 
 const doctors = ref<Doctor[]>([])
+const doctorHospitals = ref<Record<string, string[]>>({}) // doctorId -> hospitalIds
 const loading = ref(true)
 const showModal = ref(false)
 const editingDoctor = ref<Doctor | null>(null)
@@ -76,6 +168,80 @@ const searchTerm = ref('')
 const statusFilter = ref<string>('all')
 const expandedHistoryId = ref<string | null>(null)
 const doctorHistory = ref<Record<string, HistoryEntry[]>>({})
+const showDisciplineDropdown = ref(false)
+const disciplineSearch = ref('')
+
+// Fetch user profile for permissions
+const fetchUserProfile = async () => {
+  if (!user.value?.email) return
+  try {
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('hospital_id, role')
+      .eq('email', user.value.email)
+      .single()
+    userProfile.value = data
+  } catch (err) {
+    console.error('Error fetching user profile:', err)
+  }
+}
+
+// Fetch doctor-hospital relationships to check edit permissions
+const fetchDoctorHospitals = async () => {
+  try {
+    const { data } = await supabase
+      .from('doctor_hospitals')
+      .select('doctor_id, hospital_id')
+
+    const mapping: Record<string, string[]> = {}
+    for (const row of (data || [])) {
+      if (!mapping[row.doctor_id]) mapping[row.doctor_id] = []
+      mapping[row.doctor_id].push(row.hospital_id)
+    }
+    doctorHospitals.value = mapping
+  } catch (err) {
+    console.error('Error fetching doctor hospitals:', err)
+  }
+}
+
+// Check if current user can edit a specific doctor
+const canEditDoctor = (doctorId: string): boolean => {
+  // Admin or no hospital restriction = can edit all
+  if (!userProfile.value?.hospital_id || userProfile.value.role === 'admin') {
+    return true
+  }
+
+  // Check if doctor is linked to user's hospital
+  const doctorHospitalIds = doctorHospitals.value[doctorId] || []
+  return doctorHospitalIds.includes(userProfile.value.hospital_id)
+}
+
+// Filter disciplines by search
+const filteredDisciplines = computed(() => {
+  if (!disciplineSearch.value) return DISCIPLINES
+  const search = disciplineSearch.value.toLowerCase()
+  return DISCIPLINES.filter(d => d.toLowerCase().includes(search))
+})
+
+// Selected disciplines as array
+const selectedDisciplines = computed({
+  get: () => {
+    if (!formData.value.disciplines) return []
+    return formData.value.disciplines.split('|').filter(Boolean)
+  },
+  set: (val: string[]) => {
+    formData.value.disciplines = val.join('|')
+  }
+})
+
+const toggleDiscipline = (discipline: string) => {
+  const current = selectedDisciplines.value
+  if (current.includes(discipline)) {
+    selectedDisciplines.value = current.filter(d => d !== discipline)
+  } else {
+    selectedDisciplines.value = [...current, discipline]
+  }
+}
 
 // Log history entry
 const logHistory = async (doctorId: string, action: string, changes: Record<string, { old: any; new: any }> | null = null) => {
@@ -265,9 +431,8 @@ const handleSubmit = async () => {
       }
     }
 
-    showModal.value = false
+    closeModal()
     editingDoctor.value = null
-    resetForm()
     fetchDoctors()
   } catch (error: any) {
     console.error('Error saving doctor:', error)
@@ -385,6 +550,12 @@ const openNewModal = () => {
   showModal.value = true
 }
 
+const closeModal = () => {
+  showModal.value = false
+  showDisciplineDropdown.value = false
+  disciplineSearch.value = ''
+}
+
 const resetForm = () => {
   formData.value = {
     title: '',
@@ -398,9 +569,15 @@ const resetForm = () => {
     permalink: '',
     notes: ''
   }
+  showDisciplineDropdown.value = false
+  disciplineSearch.value = ''
 }
 
-onMounted(fetchDoctors)
+onMounted(() => {
+  fetchUserProfile()
+  fetchDoctorHospitals()
+  fetchDoctors()
+})
 </script>
 
 <template>
@@ -633,20 +810,36 @@ onMounted(fetchDoctors)
             </button>
 
             <button
+              v-if="canEditDoctor(doctor.id)"
               @click="handleEdit(doctor)"
               class="p-2 text-lenmed-blue hover:bg-lenmed-blue/10 rounded-lg transition-colors"
               title="Edit doctor"
             >
               <Pencil :size="18" />
             </button>
+            <span
+              v-else
+              class="p-2 text-gray-300 cursor-not-allowed"
+              title="You can only edit doctors at your assigned hospital"
+            >
+              <Pencil :size="18" />
+            </span>
 
             <button
+              v-if="canEditDoctor(doctor.id)"
               @click="handleDelete(doctor.id)"
               class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
               title="Mark for removal"
             >
               <Trash2 :size="18" />
             </button>
+            <span
+              v-else
+              class="p-2 text-gray-300 cursor-not-allowed"
+              title="You can only edit doctors at your assigned hospital"
+            >
+              <Trash2 :size="18" />
+            </span>
           </template>
         </div>
       </td>
@@ -737,7 +930,7 @@ onMounted(fetchDoctors)
           <h2 class="text-lg font-semibold text-lenmed-navy">
             {{ editingDoctor ? 'Edit Doctor' : 'Add Doctor' }}
           </h2>
-          <button @click="showModal = false" class="p-1 hover:bg-gray-100 rounded">
+          <button @click="closeModal" class="p-1 hover:bg-gray-100 rounded">
             <X :size="20" />
           </button>
         </div>
@@ -764,12 +957,61 @@ onMounted(fetchDoctors)
           </div>
           <div>
             <label class="block text-sm font-medium text-lenmed-grey mb-1">Disciplines</label>
-            <input
-              v-model="formData.disciplines"
-              type="text"
-              placeholder="Separate multiple with | e.g. Cardiologist|Physician"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lenmed-blue focus:border-transparent outline-none"
-            />
+            <div class="relative">
+              <div
+                @click="showDisciplineDropdown = !showDisciplineDropdown"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white min-h-[42px] flex flex-wrap gap-1 items-center"
+              >
+                <template v-if="selectedDisciplines.length > 0">
+                  <span
+                    v-for="disc in selectedDisciplines"
+                    :key="disc"
+                    class="bg-lenmed-blue/10 text-lenmed-blue px-2 py-0.5 rounded text-sm flex items-center gap-1"
+                  >
+                    {{ disc }}
+                    <button
+                      type="button"
+                      @click.stop="toggleDiscipline(disc)"
+                      class="hover:text-red-500"
+                    >
+                      <X :size="14" />
+                    </button>
+                  </span>
+                </template>
+                <span v-else class="text-gray-400">Select disciplines...</span>
+                <ChevronDown class="ml-auto text-gray-400" :size="18" />
+              </div>
+
+              <div
+                v-if="showDisciplineDropdown"
+                class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden"
+              >
+                <div class="p-2 border-b sticky top-0 bg-white">
+                  <input
+                    v-model="disciplineSearch"
+                    type="text"
+                    placeholder="Search disciplines..."
+                    class="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-lenmed-blue focus:border-transparent outline-none"
+                    @click.stop
+                  />
+                </div>
+                <div class="overflow-y-auto max-h-48">
+                  <div
+                    v-for="discipline in filteredDisciplines"
+                    :key="discipline"
+                    @click="toggleDiscipline(discipline)"
+                    class="px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between text-sm"
+                    :class="selectedDisciplines.includes(discipline) ? 'bg-lenmed-blue/5 text-lenmed-blue' : ''"
+                  >
+                    {{ discipline }}
+                    <Check v-if="selectedDisciplines.includes(discipline)" :size="16" class="text-lenmed-blue" />
+                  </div>
+                  <div v-if="filteredDisciplines.length === 0" class="px-3 py-2 text-gray-400 text-sm">
+                    No disciplines found
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div>
             <label class="block text-sm font-medium text-lenmed-grey mb-1">Email</label>
@@ -833,7 +1075,7 @@ onMounted(fetchDoctors)
           <div class="flex gap-3 pt-2">
             <button
               type="button"
-              @click="showModal = false"
+              @click="closeModal"
               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel

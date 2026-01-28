@@ -147,6 +147,44 @@ const relationshipsByDoctor = computed(() => {
   }))
 })
 
+// Grouped relationships - doctors with multiple hospitals shown together
+interface GroupedRelationship {
+  doctor: Doctor
+  hospitalRelations: {
+    relationship: Relationship
+    hospital: Hospital
+  }[]
+}
+
+const groupedRelationships = computed((): GroupedRelationship[] => {
+  const doctorMap = new Map<string, GroupedRelationship>()
+
+  for (const rel of relationships.value) {
+    if (!rel.doctors || !rel.hospitals) continue
+
+    const existing = doctorMap.get(rel.doctor_id)
+    if (existing) {
+      existing.hospitalRelations.push({
+        relationship: rel,
+        hospital: rel.hospitals
+      })
+    } else {
+      doctorMap.set(rel.doctor_id, {
+        doctor: rel.doctors,
+        hospitalRelations: [{
+          relationship: rel,
+          hospital: rel.hospitals
+        }]
+      })
+    }
+  }
+
+  // Convert to array and sort by doctor name
+  return Array.from(doctorMap.values()).sort((a, b) =>
+    (a.doctor.full_name || '').localeCompare(b.doctor.full_name || '')
+  )
+})
+
 const fetchData = async () => {
   try {
     const [relRes, docRes, hospRes] = await Promise.all([
@@ -359,84 +397,87 @@ onMounted(fetchData)
       Loading...
     </div>
 
-    <!-- List View -->
+    <!-- List View - Grouped by Doctor -->
     <div v-else-if="viewMode === 'list'" class="bg-white rounded-lg shadow overflow-hidden">
-      <div v-if="relationships.length === 0" class="p-8 text-center text-lenmed-grey">
+      <div v-if="groupedRelationships.length === 0" class="p-8 text-center text-lenmed-grey">
         No relationships yet. Link a doctor to a hospital to get started!
       </div>
       <table v-else class="w-full">
         <thead class="bg-gray-50 border-b">
           <tr>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Status</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Title</th>
             <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Full Name</th>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Hospital</th>
-            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Last Changed</th>
+            <th class="text-left px-6 py-3 text-sm font-medium text-lenmed-grey">Hospitals</th>
             <th class="text-right px-6 py-3 text-sm font-medium text-lenmed-grey">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y">
-          <tr v-for="rel in relationships" :key="rel.id" class="hover:bg-gray-50">
-            <!-- Status -->
-            <td class="px-6 py-4">
-              <span
-                v-if="rel.status"
-                :class="[
-                  'px-2 py-1 rounded text-xs font-medium capitalize',
-                  rel.status === 'new' ? 'bg-green-100 text-green-700' :
-                  rel.status === 'transferred' ? 'bg-blue-100 text-blue-700' :
-                  'bg-gray-100 text-gray-700'
-                ]"
-              >
-                {{ rel.status }}
-              </span>
-              <span v-else class="text-gray-400 text-sm">-</span>
-            </td>
+          <tr v-for="group in groupedRelationships" :key="group.doctor.id" class="hover:bg-gray-50">
             <td class="px-6 py-4 text-lenmed-grey">
-              {{ rel.doctors?.title || '-' }}
+              {{ group.doctor.title || '-' }}
             </td>
-            <td class="px-6 py-4 font-medium text-lenmed-navy">
-              {{ rel.doctors?.full_name || '-' }}
-            </td>
-            <td class="px-6 py-4 font-medium text-lenmed-blue">
-              {{ rel.hospitals?.name || 'Unknown' }}
-            </td>
-            <!-- Last Changed -->
             <td class="px-6 py-4">
-              <div v-if="rel.updated_at || rel.created_at" class="text-xs space-y-1">
-                <div class="flex items-center gap-1 text-gray-600">
-                  <Clock :size="12" />
-                  <span>{{ formatSATime(rel.updated_at || rel.created_at) }}</span>
-                </div>
-                <div v-if="rel.updated_by || rel.created_by" class="flex items-center gap-1 text-gray-400">
-                  <User :size="12" />
-                  <span class="truncate max-w-[100px]">{{ rel.updated_by || rel.created_by }}</span>
+              <div class="font-medium text-lenmed-navy">
+                {{ group.doctor.full_name || '-' }}
+              </div>
+              <div v-if="group.doctor.disciplines" class="text-xs text-gray-500 mt-1">
+                {{ group.doctor.disciplines.split('|').join(', ') }}
+              </div>
+            </td>
+            <td class="px-6 py-4">
+              <div class="space-y-2">
+                <div
+                  v-for="hr in group.hospitalRelations"
+                  :key="hr.relationship.id"
+                  class="flex items-center gap-2 flex-wrap"
+                >
+                  <span
+                    :class="[
+                      'px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2',
+                      'bg-lenmed-blue/10 text-lenmed-blue'
+                    ]"
+                  >
+                    <Building2 :size="14" />
+                    {{ hr.hospital.name }}
+                    <span
+                      v-if="hr.relationship.status"
+                      :class="[
+                        'ml-1 px-1.5 py-0.5 rounded text-xs',
+                        hr.relationship.status === 'new' ? 'bg-green-100 text-green-700' :
+                        hr.relationship.status === 'transferred' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      ]"
+                    >
+                      {{ hr.relationship.status }}
+                    </span>
+                  </span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      @click="openTransferModal(hr.relationship)"
+                      class="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                      title="Transfer to another hospital"
+                    >
+                      <RefreshCw :size="14" />
+                    </button>
+                    <button
+                      @click="handleDelete(hr.relationship.id)"
+                      class="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                      title="Remove from hospital"
+                    >
+                      <Trash2 :size="14" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <span v-else class="text-gray-400 text-sm">-</span>
             </td>
             <td class="px-6 py-4">
-              <div class="flex items-center justify-end gap-1">
+              <div class="flex items-center justify-end">
                 <button
-                  @click="showHistory(rel.doctors)"
+                  @click="showHistory(group.doctor)"
                   class="p-2 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
                   title="View history"
                 >
                   <History :size="18" />
-                </button>
-                <button
-                  @click="openTransferModal(rel)"
-                  class="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Transfer to another hospital"
-                >
-                  <RefreshCw :size="18" />
-                </button>
-                <button
-                  @click="handleDelete(rel.id)"
-                  class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Remove relationship"
-                >
-                  <Trash2 :size="18" />
                 </button>
               </div>
             </td>
